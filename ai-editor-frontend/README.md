@@ -35,9 +35,23 @@ npm start
 
 ## Özellikler
 
-- 💬 Chat - AI ile sohbet
-- 📁 Dosya Analizi - Tek/çoklu dosya yükleme ve analiz
-- 🔧 Kod Araçları - Refactoring ve mimari analiz
-- 🐛 Hata Analizi - Hata mesajlarından analiz
-- 🧪 Yazılım Testi - Kapsamlı test ve hata önizleme
+- 💬 **Chat** - AI ile sohbet, kod soruları
+- 📁 **Dosya Analizi** - Tek/çoklu dosya yükleme ve analiz
+- 🔧 **Kod Araçları** - Refactoring ve mimari analiz
+- 🐛 **Hata Analizi** - Hata mesajlarından çözüm bulma
+- 🧪 **Yazılım Testi** - Kapsamlı test ve hata önizleme
+- 📝 **Kod Review** - Profesyonel kod incelemesi
+- ⚡ **Performans Analizi** - Kod performans optimizasyonu
+- 🔒 **Güvenlik Taraması** - Güvenlik açığı tespiti
+- 🧪 **Test Üretimi** - Otomatik test case üretimi
+- 📚 **Dokümantasyon** - Otomatik dokümantasyon oluşturma
+- 🚀 **Proje Üretimi** - Proje klasör yapısı oluşturma
+
+### Özel Özellikler
+
+- **Dosya Seçme**: Tüm tab'larda yüklenen dosyalardan seçim yapabilme
+- **Klasör Desteği**: Klasör yükleme ve otomatik işleme
+- **Markdown Render**: Güzel formatlanmış kod ve çıktılar
+- **Syntax Highlighting**: Kod bloklarında renkli gösterim
+- **Copy to Clipboard**: Kod bloklarından tek tıkla kopyalama
 

@@ -12,7 +12,7 @@ import MainPanel from '@/components/Layout/MainPanel';
 export default function Home() {
   const { conversations, setConversations } = useChatStore();
   const { files, setFiles } = useFileStore();
-  const [currentTab, setCurrentTab] = useState<'chat' | 'files' | 'code-tools' | 'error-analysis' | 'software-test'>('chat');
+  const [currentTab, setCurrentTab] = useState<'chat' | 'files' | 'code-tools' | 'error-analysis' | 'software-test' | 'code-review' | 'performance' | 'security' | 'test-generation' | 'documentation' | 'project-generation'>('chat');
 
   useEffect(() => {
     // Load conversations and files on mount

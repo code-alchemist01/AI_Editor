@@ -401,25 +401,246 @@ Lütfen kapsamlı bir analiz raporu oluştur.`;
     projectScale: string = 'medium'
   ): Promise<{ success: boolean; text: string }> {
     try {
-      const structurePrompt = `Sen uzman bir yazılım mimarısın. Görevin verilen proje açıklamasına göre sadece optimal klasör yapısı ve dosya organizasyonu oluşturmak.
+      const structurePrompt = `Sen bir yazılım mimarısın. Verilen proje için klasör yapısı oluştur.
 
 PROJE TİPİ: ${projectType}
-TEKNOLOJİ STACK: ${techStack}
-PROJE ÖLÇEĞİ: ${projectScale}
+TEKNOLOJİ: ${techStack || 'Modern web stack'}
+ÖLÇEK: ${projectScale}
+AÇIKLAMA: ${projectDescription}
 
-PROJE AÇIKLAMASI:
-${projectDescription}
+GÖREV: Sadece aşağıdaki formatı kullanarak proje yapısını göster. BAŞKA HİÇBİR ŞEY YAZMA! 
 
-ÖNEMLİ: Sadece proje yapısını göster. Kurulum talimatları, README içeriği veya detaylı açıklamalar ekleme.`;
+\`\`\`
+project-name/
+├── src/
+│   ├── api/
+│   └── components/
+├── config/
+├── README.md
+└── package.json
+\`\`\`
+
+KURALLAR:
+- Tree karakterleri kullan: ├── └── │
+- Sadece klasör ve dosya isimlerini göster
+- Açıklama, yorum veya ek metin YOK
+- Code block dışında hiçbir şey yazma
+
+SADECE CODE BLOCK İÇİNDE TREE YAPISINI OLUŞTUR!`;
 
       const model = this.getModel();
       const result = await model.generateContent(structurePrompt);
+      const response = await result.response;
+      let text = response.text();
+
+      // Extract only the code block content if it exists
+      const codeBlockMatch = text.match(/```[\s\S]*?```/);
+      if (codeBlockMatch) {
+        // Remove the ``` markers and get clean tree structure
+        text = codeBlockMatch[0].replace(/```/g, '').trim();
+      } else {
+        // If no code block, try to extract tree-like structure
+        const lines = text.split('\n');
+        const treeLines: string[] = [];
+        let inTree = false;
+        
+        for (const line of lines) {
+          // Detect tree structure lines (containing ├── └── │ or similar)
+          if (line.match(/[├└│]/) || line.match(/^[\s\-\w\/\.]+$/)) {
+            inTree = true;
+            treeLines.push(line);
+          } else if (inTree && line.trim() === '') {
+            // Stop at first empty line after tree starts
+            break;
+          }
+        }
+        
+        if (treeLines.length > 0) {
+          text = treeLines.join('\n');
+        }
+      }
+
+      return { success: true, text };
+    } catch (error: any) {
+      return { success: false, text: `Proje yapısı oluşturma hatası: ${error.message}` };
+    }
+  }
+
+  async generateCodeReview(
+    codeContent: string,
+    fileName: string = ''
+  ): Promise<{ success: boolean; text: string }> {
+    try {
+      const reviewPrompt = `Sen deneyimli bir senior yazılım geliştirici ve kod review uzmanısın. Verilen kodu detaylı bir şekilde incele ve kapsamlı bir kod review raporu hazırla.
+
+DOSYA ADI: ${fileName || 'Bilinmiyor'}
+
+YAPILACAK İNCELEMELER:
+1. Kod Kalitesi ve Standartlar
+2. Best Practices Uyumluluğu
+3. Hata Yönetimi ve Edge Case'ler
+4. Güvenlik Açıkları
+5. Performans İyileştirmeleri
+6. Kod Tekrarı ve DRY Prensipleri
+7. Okunabilirlik ve Bakım Kolaylığı
+8. Test Edilebilirlik
+
+İNCELENECEK KOD:
+${codeContent}
+
+Lütfen her bir konuyu detaylıca analiz et, öneriler sun ve örnekler ver. Markdown formatını kullan ve açıklayıcı bir rapor hazırla.`;
+
+      const model = this.getModel();
+      const result = await model.generateContent(reviewPrompt);
       const response = await result.response;
       const text = response.text();
 
       return { success: true, text };
     } catch (error: any) {
-      return { success: false, text: `Proje yapısı oluşturma hatası: ${error.message}` };
+      return { success: false, text: `Kod review hatası: ${error.message}` };
+    }
+  }
+
+  async generatePerformanceAnalysis(
+    codeContent: string,
+    fileName: string = ''
+  ): Promise<{ success: boolean; text: string }> {
+    try {
+      const performancePrompt = `Sen bir performans optimizasyon uzmanısın. Verilen kodu performans açısından detaylı analiz et ve iyileştirme önerileri sun.
+
+DOSYA ADI: ${fileName || 'Bilinmiyor'}
+
+ANALİZ EDİLECEK KONULAR:
+1. Algoritma Karmaşıklığı (Big O)
+2. Bellek Kullanımı
+3. Veritabanı Sorguları ve Optimizasyon
+4. Döngü ve İterasyon Optimizasyonları
+5. Cache Stratejileri
+6. Asenkron İşlemler
+7. Gereksiz Hesaplamalar
+8. Bottleneck'ler
+
+ANALİZ EDİLECEK KOD:
+${codeContent}
+
+Her bir performans sorununu tespit et, önceliklendir ve somut çözüm önerileri sun. Markdown formatında detaylı bir performans analiz raporu hazırla.`;
+
+      const model = this.getModel();
+      const result = await model.generateContent(performancePrompt);
+      const response = await result.response;
+      const text = response.text();
+
+      return { success: true, text };
+    } catch (error: any) {
+      return { success: false, text: `Performans analizi hatası: ${error.message}` };
+    }
+  }
+
+  async generateSecurityScan(
+    codeContent: string,
+    fileName: string = ''
+  ): Promise<{ success: boolean; text: string }> {
+    try {
+      const securityPrompt = `Sen bir siber güvenlik uzmanısın. Verilen kodu güvenlik açısından detaylı analiz et ve güvenlik açıklarını tespit et.
+
+DOSYA ADI: ${fileName || 'Bilinmiyor'}
+
+TARANACAK GÜVENLİK KONULARI:
+1. SQL Injection
+2. XSS (Cross-Site Scripting)
+3. CSRF (Cross-Site Request Forgery)
+4. Authentication ve Authorization Hataları
+5. Input Validation Eksiklikleri
+6. Sensitive Data Exposure
+7. Insecure Dependencies
+8. API Güvenliği
+9. Cryptography Hataları
+10. Logging ve Monitoring Eksiklikleri
+
+TARANACAK KOD:
+${codeContent}
+
+Her bir güvenlik açığını öncelik seviyesiyle (Yüksek, Orta, Düşük) belirle, açıkla ve çözüm önerileri sun. Markdown formatında detaylı bir güvenlik raporu hazırla.`;
+
+      const model = this.getModel();
+      const result = await model.generateContent(securityPrompt);
+      const response = await result.response;
+      const text = response.text();
+
+      return { success: true, text };
+    } catch (error: any) {
+      return { success: false, text: `Güvenlik taraması hatası: ${error.message}` };
+    }
+  }
+
+  async generateTestCases(
+    codeContent: string,
+    fileName: string = '',
+    testType: string = 'unit'
+  ): Promise<{ success: boolean; text: string }> {
+    try {
+      const testPrompt = `Sen bir test mühendisi uzmanısın. Verilen kod için kapsamlı test case'leri oluştur.
+
+DOSYA ADI: ${fileName || 'Bilinmiyor'}
+TEST TİPİ: ${testType}
+
+OLUŞTURULACAK TESTLER:
+1. Unit Testler (Fonksiyon bazlı)
+2. Integration Testler
+3. Edge Case Testleri
+4. Error Handling Testleri
+5. Performance Testleri
+6. Security Testleri
+
+TEST EDİLECEK KOD:
+${codeContent}
+
+Her test için açıklama, beklenen sonuç ve örnek test kodları hazırla. Markdown formatında detaylı bir test planı oluştur.`;
+
+      const model = this.getModel();
+      const result = await model.generateContent(testPrompt);
+      const response = await result.response;
+      const text = response.text();
+
+      return { success: true, text };
+    } catch (error: any) {
+      return { success: false, text: `Test üretimi hatası: ${error.message}` };
+    }
+  }
+
+  async generateDocumentation(
+    codeContent: string,
+    fileName: string = '',
+    docType: string = 'api'
+  ): Promise<{ success: boolean; text: string }> {
+    try {
+      const docPrompt = `Sen bir teknik yazar uzmanısın. Verilen kod için kapsamlı ve anlaşılır dokümantasyon oluştur.
+
+DOSYA ADI: ${fileName || 'Bilinmiyor'}
+DOKÜMANTASYON TİPİ: ${docType}
+
+DOKÜMANTASYON İÇERİĞİ:
+1. Genel Açıklama ve Amaç
+2. Kurulum ve Kullanım
+3. API Referansı (eğer varsa)
+4. Fonksiyon/Method Açıklamaları
+5. Parametreler ve Dönüş Değerleri
+6. Örnekler ve Kullanım Senaryoları
+7. Notlar ve Önemli Bilgiler
+
+DOKÜMANTE EDİLECEK KOD:
+${codeContent}
+
+Anlaşılır, örneklerle dolu ve kullanıcı dostu bir dokümantasyon hazırla. Markdown formatını kullan.`;
+
+      const model = this.getModel();
+      const result = await model.generateContent(docPrompt);
+      const response = await result.response;
+      const text = response.text();
+
+      return { success: true, text };
+    } catch (error: any) {
+      return { success: false, text: `Dokümantasyon üretimi hatası: ${error.message}` };
     }
   }
 

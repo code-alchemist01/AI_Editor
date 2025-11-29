@@ -50,12 +50,35 @@ npm start
 
 ## API Endpoints
 
+### Chat & Conversations
 - `POST /api/chat/message` - Chat mesajı gönder
 - `GET /api/conversations` - Konuşmaları listele
 - `POST /api/conversations` - Yeni konuşma oluştur
+
+### Files
 - `GET /api/files` - Dosyaları listele
 - `POST /api/files` - Dosya yükle
+- `GET /api/files/:id` - Dosya içeriği al
+- `PUT /api/files/:id` - Dosya güncelle
+- `DELETE /api/files/:id` - Dosya sil
 - `POST /api/files/analyze/multiple` - Çoklu dosya analizi
-- `POST /api/error-analysis/analyze` - Hata analizi
+- `POST /api/files/analyze/single` - Tek dosya analizi
+
+### Error Analysis
+- `POST /api/error-analysis/analyze` - Hata mesajından analiz
+- `POST /api/error-analysis/analyze-from-files` - Dosyalardan hata analizi
+
+### Code Tools
 - `POST /api/code-tools/refactor` - Kod refactoring
+- `POST /api/code-tools/analyze-architecture` - Mimari analiz
+- `POST /api/code-tools/code-review` - Kod review
+- `POST /api/code-tools/performance-analysis` - Performans analizi
+- `POST /api/code-tools/security-scan` - Güvenlik taraması
+- `POST /api/code-tools/generate-tests` - Test üretimi
+- `POST /api/code-tools/generate-documentation` - Dokümantasyon üretimi
+
+### Projects
+- `GET /api/projects` - Projeleri listele
+- `POST /api/projects` - Proje oluştur
+- `POST /api/projects/generate-structure` - Proje yapısı oluştur
 

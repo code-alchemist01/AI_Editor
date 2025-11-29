@@ -4,11 +4,17 @@ Kod yazarken yanınızda bir asistan olsun ister misiniz? Gemini AI ile çalış
 
 ## Özellikler
 
-**💬 Chat** - Kod hakkında sorular sorun, öneriler alın  
-**📁 Dosya Analizi** - Dosyalarınızı yükleyin, detaylı analiz yaptırın  
+**💬 Chat** - AI ile sohbet edin, kod hakkında sorular sorun  
+**📁 Dosya Analizi** - Tek/çoklu dosya yükleme ve detaylı analiz  
 **🔧 Kod Araçları** - Refactoring ve mimari analiz  
-**🐛 Hata Analizi** - Hata mesajlarınızdan çözüm bulun  
-**🧪 Yazılım Testi** - Projenizi tarayın, potansiyel sorunları görün
+**🐛 Hata Analizi** - Hata mesajlarından çözüm bulun  
+**🧪 Yazılım Testi** - Projenizi tarayın, potansiyel sorunları görün  
+**📝 Kod Review** - Profesyonel kod incelemesi ve öneriler  
+**⚡ Performans Analizi** - Kod performansını optimize edin  
+**🔒 Güvenlik Taraması** - Güvenlik açıklarını tespit edin  
+**🧪 Test Üretimi** - Otomatik test case'leri oluşturun  
+**📚 Dokümantasyon** - Otomatik dokümantasyon üretimi  
+**🚀 Proje Üretimi** - Yeni proje için klasör yapısı oluşturun
 
 ## Hızlı Kurulum
 
@@ -66,11 +72,16 @@ Tarayıcıda `http://localhost:3000` adresine gidin.
 
 ## Nasıl Çalışır?
 
-1. **Dosya yükleyin** - Tek dosya veya klasör halinde
-2. **Analiz seçin** - İstediğiniz analiz türünü seçin
-3. **Sonuçları görün** - Detaylı raporlar ve öneriler alın
+1. **Dosya yükleyin** - Tek dosya veya klasör halinde (tüm tab'larda desteklenir)
+2. **Analiz seçin** - 11 farklı özellikten istediğinizi seçin
+3. **Sonuçları görün** - Detaylı raporlar, öneriler ve çözümler alın
 
-Klasör yüklediğinizde tüm dosyalar tek bir analizde işlenir. Chat sekmesinde AI ile sohbet edebilir, kod örnekleri isteyebilirsiniz.
+### Özellikler
+
+- **Dosya Seçimi**: Tüm tab'larda yüklediğiniz dosyalardan seçim yapabilirsiniz
+- **Klasör Desteği**: Klasör yüklediğinizde tüm dosyalar otomatik analiz edilir
+- **Markdown Çıktı**: Tüm sonuçlar güzel formatlanmış Markdown olarak görüntülenir
+- **Otomatik Scroll**: Sonuçlar geldiğinde sayfa otomatik olarak kayar
 
 ## Detaylar
 

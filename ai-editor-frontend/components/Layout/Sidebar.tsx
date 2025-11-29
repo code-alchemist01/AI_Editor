@@ -7,7 +7,7 @@ interface SidebarProps {
   conversations: Conversation[];
   files: FileRecord[];
   currentTab: string;
-  onTabChange: (tab: 'chat' | 'files' | 'code-tools' | 'error-analysis' | 'software-test') => void;
+  onTabChange: (tab: 'chat' | 'files' | 'code-tools' | 'error-analysis' | 'software-test' | 'code-review' | 'performance' | 'security' | 'test-generation' | 'documentation' | 'project-generation') => void;
 }
 
 export default function Sidebar({ conversations, files, currentTab, onTabChange }: SidebarProps) {
@@ -20,6 +20,12 @@ export default function Sidebar({ conversations, files, currentTab, onTabChange 
     { id: 'code-tools', label: '🔧 Kod Araçları', icon: '🔧' },
     { id: 'error-analysis', label: '🐛 Hata Analizi', icon: '🐛' },
     { id: 'software-test', label: '🧪 Yazılım Testi', icon: '🧪' },
+    { id: 'code-review', label: '📝 Kod Review', icon: '📝' },
+    { id: 'performance', label: '⚡ Performans Analizi', icon: '⚡' },
+    { id: 'security', label: '🔒 Güvenlik Taraması', icon: '🔒' },
+    { id: 'test-generation', label: '🧪 Test Üretimi', icon: '🧪' },
+    { id: 'documentation', label: '📚 Dokümantasyon', icon: '📚' },
+    { id: 'project-generation', label: '🚀 Proje Üretimi', icon: '🚀' },
   ];
 
   return (
