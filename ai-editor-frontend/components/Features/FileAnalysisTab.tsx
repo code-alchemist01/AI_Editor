@@ -23,7 +23,23 @@ export default function FileAnalysisTab() {
     // Single file upload
     if (uploadedFiles.length === 1) {
       const file = uploadedFiles[0];
+      
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Dosya boyutu çok büyük. Maksimum 10MB olmalıdır.');
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+
       const reader = new FileReader();
+      reader.onerror = () => {
+        alert('Dosya okuma hatası. Lütfen tekrar deneyin.');
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      };
       reader.onload = async (event) => {
         const content = event.target?.result as string;
         try {
@@ -32,8 +48,10 @@ export default function FileAnalysisTab() {
             content,
           });
           addFile(fileRecord);
-        } catch (error) {
+          alert(`✅ ${file.name} başarıyla yüklendi!`);
+        } catch (error: any) {
           console.error('File upload error:', error);
+          alert(error.response?.data?.error || 'Dosya yükleme hatası. Lütfen tekrar deneyin.');
         }
       };
       reader.readAsText(file);
@@ -281,6 +299,7 @@ export default function FileAnalysisTab() {
           <input
             ref={fileInputRef}
             type="file"
+            accept=".py,.js,.ts,.tsx,.jsx,.java,.c,.cpp,.cs,.go,.rs,.php,.rb,.swift,.kt,.html,.css,.sql,.json,.yaml,.yml,.md,.txt,.vue"
             onChange={handleFileUpload}
             className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
           />

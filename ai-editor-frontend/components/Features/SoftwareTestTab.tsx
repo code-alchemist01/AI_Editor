@@ -1,91 +1,245 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useFileStore } from '@/stores/fileStore';
 import { filesApi } from '@/lib/api/files';
-import { flattenFiles } from '@/lib/utils/flattenFiles';
 import { getAllFilesForDropdown } from '@/lib/utils/getAllFilesForDropdown';
-import MarkdownRenderer from '@/components/ui/MarkdownRenderer';
+import { testApi, ImprovementLoopState, ExecutionResult } from '@/lib/api/test';
+import TestExecutionPanel from '@/components/ui/TestExecutionPanel';
 
 export default function SoftwareTestTab() {
-  const { files } = useFileStore();
+  const { files, updateFile } = useFileStore();
   const [testMode, setTestMode] = useState<'manual' | 'auto'>('manual');
-  const [testResult, setTestResult] = useState<string>('');
+  const [selectedFileId, setSelectedFileId] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
-  const [analyzeAll, setAnalyzeAll] = useState<boolean>(true);
-  
+  const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
+  const [improvedCode, setImprovedCode] = useState<string>('');
+  const [improvementExplanation, setImprovementExplanation] = useState<string>('');
+  const [loopState, setLoopState] = useState<ImprovementLoopState | null>(null);
+  const [loopId, setLoopId] = useState<string | null>(null);
+  const [isLoopRunning, setIsLoopRunning] = useState(false);
+  const [currentStep, setCurrentStep] = useState<'idle' | 'run' | 'improve' | 'apply'>('idle');
+
   // Get all files including folder files for display
   const allFilesForDropdown = useMemo(() => getAllFilesForDropdown(files), [files]);
 
-  const handleErrorPreview = async () => {
-    if (files.length === 0) return;
+  // Polling for loop status (auto mode)
+  useEffect(() => {
+    if (!isLoopRunning || !loopId || testMode !== 'auto') return;
+
+    const interval = setInterval(async () => {
+      try {
+        const status = await testApi.getLoopStatus(loopId);
+        setLoopState(status);
+
+        if (status.status === 'completed' || status.status === 'stopped' || status.status === 'failed') {
+          setIsLoopRunning(false);
+          clearInterval(interval);
+        }
+      } catch (error) {
+        console.error('Error polling loop status:', error);
+      }
+    }, 2000); // Poll every 2 seconds
+
+    return () => clearInterval(interval);
+  }, [isLoopRunning, loopId, testMode]);
+
+  // Manual Mode: Run Code
+  const handleRunCode = async () => {
+    if (!selectedFileId) {
+      alert('Lütfen bir dosya seçin');
+      return;
+    }
 
     setLoading(true);
+    setCurrentStep('run');
     try {
-      // Determine which files to analyze
-      let filesToAnalyze = files;
+      const result = await testApi.runCode(selectedFileId);
+      setExecutionResult(result);
       
-      if (!analyzeAll && selectedFileIds.length > 0) {
-        // Analyze only selected files - find files by ID (including folder files)
-        const selectedFiles: any[] = [];
-        for (const file of files) {
-          if (file.isFolder && file.folderFiles) {
-            // Check if folder is selected or any of its files are selected
-            const folderSelected = selectedFileIds.includes(file.id || '');
-            if (folderSelected) {
-              selectedFiles.push(file); // Add entire folder
-            } else {
-              // Check individual folder files
-              const selectedFolderFiles = file.folderFiles.filter((f) => 
-                f.id && selectedFileIds.includes(f.id)
-              );
-              if (selectedFolderFiles.length > 0) {
-                // Create a virtual folder with only selected files
-                selectedFiles.push({
-                  ...file,
-                  folderFiles: selectedFolderFiles,
-                });
-              }
-            }
-          } else if (selectedFileIds.includes(file.id || '')) {
-            selectedFiles.push(file);
-          }
+      // Create loop state for manual mode if it doesn't exist (needed for improve step)
+      if (!loopId && !result.success) {
+        try {
+          const loopResult = await testApi.startImprovementLoop(selectedFileId, 'manual', 10);
+          setLoopId(loopResult.loopId);
+          // Run code step to populate loop state with error
+          await testApi.executeStep(selectedFileId, 'run', loopResult.loopId);
+        } catch (loopError) {
+          console.error('Loop creation error:', loopError);
+          // Continue anyway, we can still improve without loop state
         }
-        filesToAnalyze = selectedFiles;
       }
-
-      // Flatten selected files (including folder contents) and fetch their contents
-      const filesData = await flattenFiles(filesToAnalyze);
-
-      if (filesData.length === 0) {
-        alert('Analiz edilecek içeriği olan dosya bulunamadı. Lütfen dosyaların içeriğinin yüklü ve boş olmadığından emin olun.');
-        setLoading(false);
-        return;
-      }
-
-      // Filter out empty files just to be safe
-      const validFilesData = filesData.filter(f => f.content && f.content.trim().length > 0);
       
-      if (validFilesData.length === 0) {
-        alert('Analiz edilecek içeriği olan dosya bulunamadı.');
-        setLoading(false);
-        return;
-      }
-
-      const result = await filesApi.analyzeMultiple(
-        validFilesData,
-        'Orta (Detaylı Analiz)',
-        'Tüm Hata Türleri'
-      );
-      setTestResult(result.analysis);
-    } catch (error) {
-      console.error('Test error:', error);
-      alert('Analiz sırasında bir hata oluştu. Lütfen tekrar deneyin.');
+      setCurrentStep(result.success ? 'idle' : 'improve');
+    } catch (error: any) {
+      console.error('Run code error:', error);
+      alert(error.response?.data?.error || 'Kod çalıştırma hatası');
+      setCurrentStep('idle');
     } finally {
       setLoading(false);
     }
   };
+
+  // Manual Mode: Improve Code
+  const handleImproveCode = async () => {
+    if (!selectedFileId) {
+      alert('Lütfen bir dosya seçin');
+      return;
+    }
+
+    // Check if we have an error from last execution
+    if (!executionResult || executionResult.success || !executionResult.error) {
+      alert('Önce kodu çalıştırın ve bir hata olsun');
+      return;
+    }
+
+    setLoading(true);
+    setCurrentStep('improve');
+    try {
+      // Pass error directly in request body for manual mode
+      const stepResult = await testApi.executeStep(selectedFileId, 'improve', loopId || undefined, executionResult.error);
+      
+      if (stepResult.result.improvedCode) {
+        setImprovedCode(stepResult.result.improvedCode);
+        setImprovementExplanation(stepResult.result.explanation || '');
+        setCurrentStep('apply');
+      } else {
+        alert('Kod iyileştirme başarısız');
+        setCurrentStep('improve');
+      }
+    } catch (error: any) {
+      console.error('Improve code error:', error);
+      alert(error.response?.data?.error || 'Kod iyileştirme hatası');
+      setCurrentStep('improve');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Manual Mode: Apply Improved Code
+  const handleApplyCode = async () => {
+    if (!selectedFileId || !improvedCode) {
+      alert('İyileştirilmiş kod bulunamadı');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await filesApi.update(selectedFileId, { content: improvedCode });
+      updateFile(selectedFileId, { content: improvedCode });
+      
+      setImprovedCode('');
+      setImprovementExplanation('');
+      setExecutionResult(null);
+      setCurrentStep('run');
+      
+      alert('Kod güncellendi. Tekrar test edebilirsiniz.');
+    } catch (error: any) {
+      console.error('Apply code error:', error);
+      alert(error.response?.data?.error || 'Kod güncelleme hatası');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Auto Mode: Start Improvement Loop
+  const handleStartAutoLoop = async () => {
+    if (!selectedFileId) {
+      alert('Lütfen bir dosya seçin');
+      return;
+    }
+
+    setLoading(true);
+    setIsLoopRunning(true);
+    try {
+      const result = await testApi.startImprovementLoop(selectedFileId, 'auto', 10);
+      setLoopId(result.loopId);
+      
+      // Initial status fetch
+      const status = await testApi.getLoopStatus(result.loopId);
+      setLoopState(status);
+    } catch (error: any) {
+      console.error('Start loop error:', error);
+      alert(error.response?.data?.error || 'Döngü başlatma hatası');
+      setIsLoopRunning(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Auto Mode: Stop Loop
+  const handleStopLoop = async () => {
+    if (!loopId) return;
+
+    try {
+      await testApi.stopLoop(loopId);
+      setIsLoopRunning(false);
+      
+      // Refresh status
+      const status = await testApi.getLoopStatus(loopId);
+      setLoopState(status);
+    } catch (error: any) {
+      console.error('Stop loop error:', error);
+      alert(error.response?.data?.error || 'Döngü durdurma hatası');
+    }
+  };
+
+  // Download improved code
+  const handleDownloadCode = () => {
+    let codeToDownload = '';
+    let fileName = 'improved_code.py';
+
+    if (testMode === 'manual' && improvedCode) {
+      codeToDownload = improvedCode;
+      if (selectedFile) {
+        fileName = `improved_${selectedFile.name}`;
+      }
+    } else if (testMode === 'auto' && loopState?.currentCode) {
+      codeToDownload = loopState.currentCode;
+      if (selectedFile) {
+        fileName = `improved_${selectedFile.name}`;
+      }
+    } else if (selectedFile?.content) {
+      codeToDownload = selectedFile.content;
+      fileName = selectedFile.name;
+    }
+
+    if (!codeToDownload) {
+      alert('İndirilecek kod bulunamadı');
+      return;
+    }
+
+    // Create blob and download
+    const blob = new Blob([codeToDownload], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Reset state when mode changes
+  useEffect(() => {
+    setExecutionResult(null);
+    setImprovedCode('');
+    setImprovementExplanation('');
+    setLoopState(null);
+    setLoopId(null);
+    setIsLoopRunning(false);
+    setCurrentStep('idle');
+  }, [testMode]);
+
+  const selectedFile = files.find((f) => f.id === selectedFileId) ||
+                      allFilesForDropdown.find((f) => f.id === selectedFileId);
+  
+  // Check if there's code to download
+  const hasCodeToDownload = 
+    (testMode === 'manual' && improvedCode) || 
+    (testMode === 'auto' && loopState?.currentCode) ||
+    selectedFile?.content;
 
   return (
     <div className="p-6">
@@ -97,20 +251,20 @@ export default function SoftwareTestTab() {
         <div className="flex gap-4">
           <button
             onClick={() => setTestMode('manual')}
-            className={`px-6 py-3 rounded-lg font-medium ${
+            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
               testMode === 'manual'
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}
           >
             🔵 Manuel Test
           </button>
           <button
             onClick={() => setTestMode('auto')}
-            className={`px-6 py-3 rounded-lg font-medium ${
+            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
               testMode === 'auto'
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}
           >
             🟢 Otomatik Test
@@ -119,84 +273,134 @@ export default function SoftwareTestTab() {
       </div>
 
       {/* File Selection */}
-      {files.length > 0 && (
-        <div className="input-group mb-4">
-          <div className="flex items-center gap-4 mb-2">
-            <label className="block text-sm font-medium">Dosya/Klasör Seçimi</label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={analyzeAll}
-                onChange={(e) => {
-                  setAnalyzeAll(e.target.checked);
-                  if (e.target.checked) {
-                    setSelectedFileIds([]);
-                  }
-                }}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-700">Tüm dosyaları analiz et</span>
-            </label>
+      {allFilesForDropdown.length > 0 && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-2">Dosya Seç</label>
+          <select
+            value={selectedFileId}
+            onChange={(e) => setSelectedFileId(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Dosya seçin...</option>
+            {allFilesForDropdown.map((file) => (
+              <option key={file.id} value={file.id}>
+                {file.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Manual Mode Controls */}
+      {testMode === 'manual' && (
+        <div className="mb-6 space-y-4">
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleRunCode}
+              disabled={loading || !selectedFileId || currentStep === 'improve' || currentStep === 'apply'}
+              className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {loading && currentStep === 'run' ? '⏳ Çalıştırılıyor...' : '▶️ Kodu Çalıştır'}
+            </button>
+
+            {executionResult && !executionResult.success && (
+              <button
+                onClick={handleImproveCode}
+                disabled={loading || currentStep === 'run' || currentStep === 'apply'}
+                className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading && currentStep === 'improve' ? '⏳ İyileştiriliyor...' : '🔧 İyileştir'}
+              </button>
+            )}
+
+            {improvedCode && (
+              <>
+                <button
+                  onClick={handleApplyCode}
+                  disabled={loading || currentStep === 'run' || currentStep === 'improve'}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {loading ? '⏳ Uygulanıyor...' : '✅ Düzeltmeyi Uygula'}
+                </button>
+                <button
+                  onClick={handleDownloadCode}
+                  disabled={loading}
+                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  💾 İndir
+                </button>
+              </>
+            )}
+
+            {executionResult && executionResult.success && (
+              <div className="px-6 py-3 bg-green-100 text-green-800 rounded-lg font-medium flex items-center gap-2">
+                ✅ Kod başarıyla çalıştı!
+              </div>
+            )}
           </div>
-          
-          {!analyzeAll && (
-            <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar border border-gray-300 rounded-lg p-3">
-              {/* All Files (including folder files) */}
-              {allFilesForDropdown.length > 0 ? (
-                <div>
-                  {allFilesForDropdown.map((file) => (
-                    <label key={file.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedFileIds.includes(file.id || '')}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedFileIds([...selectedFileIds, file.id || '']);
-                          } else {
-                            setSelectedFileIds(selectedFileIds.filter((id) => id !== file.id));
-                          }
-                        }}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm">{file.name}</span>
-                    </label>
-                  ))}
+
+          {/* Improved Code Preview */}
+          {improvedCode && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <h4 className="font-semibold text-yellow-800 mb-2">İyileştirilmiş Kod:</h4>
+              {improvementExplanation && (
+                <div className="mb-3 text-sm text-yellow-700 bg-yellow-100 p-2 rounded">
+                  {improvementExplanation}
                 </div>
-              ) : (
-                <p className="text-sm text-gray-500">Henüz dosya yok</p>
               )}
+              <pre className="bg-gray-900 text-green-400 p-4 rounded overflow-x-auto text-sm max-h-64 overflow-y-auto">
+                {improvedCode}
+              </pre>
             </div>
           )}
         </div>
       )}
 
-      {/* Error Preview Button */}
-      <div className="mb-4">
-        <button
-          onClick={handleErrorPreview}
-          disabled={loading || files.length === 0 || (!analyzeAll && selectedFileIds.length === 0)}
-          className="action-button disabled:opacity-50"
-        >
-          {loading ? 'Test ediliyor...' : analyzeAll ? '🔍 Tüm Dosyaları Analiz Et ve Hata Önizlemesi Oluştur' : `🔍 Seçili Dosyaları Analiz Et (${selectedFileIds.length})`}
-        </button>
-      </div>
-
-      {/* Test Result */}
-      {testResult && (
-        <div className="mt-6 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-green-600 to-teal-600 text-white px-6 py-4">
-            <h3 className="text-xl font-bold flex items-center gap-2">
-              <span>📊</span>
-              Kapsamlı Hata Önizleme Raporu
-            </h3>
-          </div>
-          <div className="p-6 custom-scrollbar max-h-[700px] overflow-y-auto">
-            <MarkdownRenderer content={testResult} />
+      {/* Auto Mode Controls */}
+      {testMode === 'auto' && (
+        <div className="mb-6">
+          <div className="flex gap-3 flex-wrap">
+            {!isLoopRunning ? (
+              <button
+                onClick={handleStartAutoLoop}
+                disabled={loading || !selectedFileId}
+                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? '⏳ Başlatılıyor...' : '🚀 Başlat'}
+              </button>
+            ) : (
+              <button
+                onClick={handleStopLoop}
+                disabled={loading}
+                className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                ⏹️ Durdur
+              </button>
+            )}
+            {hasCodeToDownload && (
+              <button
+                onClick={handleDownloadCode}
+                disabled={loading}
+                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              >
+                💾 İyileştirilmiş Kodu İndir
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      {files.length === 0 && (
+      {/* Test Execution Panel */}
+      <TestExecutionPanel
+        loopState={loopState}
+        output={executionResult?.output || loopState?.history[loopState.history.length - 1]?.output}
+        error={executionResult?.error || loopState?.lastError || loopState?.history[loopState.history.length - 1]?.error}
+        isRunning={isLoopRunning}
+        onStop={handleStopLoop}
+      />
+
+      {/* No Files Warning */}
+      {allFilesForDropdown.length === 0 && (
         <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-yellow-800">
             ⚠️ Test edilecek dosya bulunamadı! Lütfen önce dosya yönetimi bölümünden dosya yükleyin.
